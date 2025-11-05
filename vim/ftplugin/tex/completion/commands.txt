@@ -1,7 +1,7 @@
 \begin{
 \end{
 \RequirePackage{
-\documentclass[12pt]{
+\documentclass[
 \usepackage{
 \input{
 \includegraphics
@@ -65,6 +65,7 @@
 \maketitle
 \tableofcontents
 \setcounter{
+\setcounter{tocdepth}{1}
 \cleardoublepage
 \setmainfont{
 \setsansfont{
@@ -128,3 +129,8 @@
 \longleftrightarrow
 \longmapsfrom
 \longmapsto
+\titleformat{<command>}{<format>}{<label>}{<sep>}{<before>}[<after>]
+\titlecontents{<section_level>}[<left_sep>]{<above_code>}{<numbered_code>}{<numberless_code>}{<title_page_code>}[<below_code>]
+\titlespacing{<section_level>}{<left>}{<before_sep>}{<after_sep>}[<right>]
+\renewcommand{\arraystretch}{1.5}
+\setlength{\tabcolsep}{10pt}
