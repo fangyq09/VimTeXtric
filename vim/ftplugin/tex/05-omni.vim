@@ -106,7 +106,7 @@ endfunction
 function! s:TeX_Find_bibref_items(pattern,file,dir,type)
 	let result = []
 	let sub_res = []
-	execute 'lcd' fnameescape(a:dir)
+	execute 'lcd'. fnameescape(a:dir)
 	if a:file =~? '\.bib$'
 		let bib_file = readfile(a:file)
 	endif
@@ -136,7 +136,6 @@ function! s:TeX_Find_bibref_items(pattern,file,dir,type)
 endfunction
 "}}}
 
-inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 
 setlocal omnifunc=TEXOMNI
 "let s:completion_type = ''
@@ -155,7 +154,6 @@ function! TEXOMNI(findstart, base)  "{{{1
 		if line[pos - 1] == '\'
 			let pos -= 1
 		endif
-		let b:omni_start_pos = pos
 		return pos
 	else
 		" return suggestions in an array
@@ -163,18 +161,33 @@ function! TEXOMNI(findstart, base)  "{{{1
 		let suggestions = []
 		let text = getline(".")[0:col(".")-2]
 		let com_prefix = escape(a:base, '\')
-		if com_prefix =~ '^\\.*'
+		if (com_prefix =~ '^\\.*')
 			" suggest known commands
 			if !exists('b:omni_com_data_loaded')
 				call s:LoadOmniComData()
 				let b:omni_com_data_loaded = 1
 			endif
-			let command_list = extend(copy(s:tex_commands),copy(s:tex_unicode))
+			let command_list = extend(copy(s:tex_commands),s:tex_unicode)
 			for entry in command_list
-				if entry =~ '^' . escape(a:base, '\')
-					if index(suggestions, entry) == -1
-						call add(suggestions, entry)
+				if entry =~ '^\s*' . com_prefix
+					let item = entry
+				elseif entry =~ '.*{\s*' . com_prefix
+					let item = substitute(entry, '.\{-}{\s*\ze' . com_prefix, '', '')
+				else
+					let item = ''
+				endif
+				if item != ''
+					let comments_pos = stridx(item, '%')
+					if comments_pos == -1
+						let command_cand = item
+						let command_comments = ''
+					else
+						let command_cand = strpart(item, 0, comments_pos)
+						let command_comments = strpart(item, comments_pos)
 					endif
+					let command_cand = trim(command_cand)
+					call add(suggestions, {'word': command_cand, 'dup': 0, 'empty': 0,
+								\ 'menu': command_comments})
 				endif
 			endfor
 		elseif text =~ '\\\(begin\|end\)\s*{'
@@ -184,7 +197,7 @@ function! TEXOMNI(findstart, base)  "{{{1
 				let b:omni_env_data_loaded = 1
 			endif
 			for entry in s:tex_env_data
-				if entry =~ '^' . escape(a:base, '\')
+				if entry =~ '^\s*' .  com_prefix
 					if !s:NextCharsMatch('}')
 						let entry = entry . '}'
 					endif
@@ -198,8 +211,8 @@ function! TEXOMNI(findstart, base)  "{{{1
 				let b:omni_fonts_data_loaded = 1
 			endif
 			for entry in s:tex_fonts_data
-				if entry =~ '^' . escape(a:base, '\')
-					if !s:NextCharsMatch('}') && (line[b:omni_start_pos - 1] == '{')
+				if entry =~ '^\s*' . a:base
+					if !s:NextCharsMatch('}') && (text =~ '{'.a:base.'$')
 						let entry = entry . '}'
 					endif
 					call add(suggestions, entry)
@@ -212,7 +225,7 @@ function! TEXOMNI(findstart, base)  "{{{1
 				let b:omni_pkg_data_loaded = 1
 			endif
 			for entry in s:tex_packages_data
-				if entry =~ '^' . escape(a:base, '\')
+				if entry =~ '^\s*' . a:base
 					call add(suggestions, entry)
 				endif
 			endfor
@@ -221,8 +234,11 @@ function! TEXOMNI(findstart, base)  "{{{1
 				let [b:tex_main_file_name,b:tex_proj_dir] = tex#outils#GetMainTeXFile()
 			endif
 			if b:tex_proj_dir != ''
-				execute 'lcd' fnameescape(b:tex_proj_dir)
-				if com_prefix =~ '^\.'
+				execute 'lcd'. fnameescape(b:tex_proj_dir)
+				if com_prefix =~ '^\.\{2}'
+					let texfiles1 = glob('../*.{tex,TEX}',0,1)
+					let texfiles2 = glob('../*/*.{tex,TEX}',0,1)
+				elseif com_prefix =~ '^\.'
 					let texfiles1 = glob('./*.{tex,TEX}',0,1)
 					let texfiles2 = glob('./*/*.{tex,TEX}',0,1)
 				else
@@ -245,8 +261,13 @@ function! TEXOMNI(findstart, base)  "{{{1
 				let [b:tex_main_file_name,b:tex_proj_dir] = tex#outils#GetMainTeXFile()
 			endif
 			if b:tex_proj_dir != ''
-				execute 'lcd' fnameescape(b:tex_proj_dir)
-				if com_prefix =~ '^\.'
+				execute 'lcd'. fnameescape(b:tex_proj_dir)
+				if com_prefix =~ '^\.\{2}'
+					let all_files_1 = glob('../*.*', 0, 1) 
+					let all_files_2 = glob('../*/*.*', 0, 1) 
+					let pictures_1 = filter(all_files_1, 'v:val =~ ''\c\.' . searchstr . '$''')
+					let pictures_2 = filter(all_files_2, 'v:val =~ ''\c\.' . searchstr . '$''')
+				elseif com_prefix =~ '^\.'
 					let all_files_1 = glob('./*.*', 0, 1) 
 					let all_files_2 = glob('./*/*.*', 0, 1) 
 					let pictures_1 = []
@@ -285,7 +306,6 @@ function! TEXOMNI(findstart, base)  "{{{1
 				let [b:tex_main_file_name,b:tex_proj_dir] = tex#outils#GetMainTeXFile()
 			endif
 			let bib_pattern = '^\s*@.*{'.com_prefix
-			let seen = {}
 			if !empty(b:tex_bib_name)
 				for fn in b:tex_bib_name
 					let bib_source = fn
@@ -296,10 +316,7 @@ function! TEXOMNI(findstart, base)  "{{{1
 					if len(bib_item_li)>0
 						for bib_item in bib_item_li
 							let key = bib_item[0]
-							if !has_key(seen, key)
-								let seen[key] = 1
-								call add(suggestions, {'word': key, 'dup': 1, 'abbr': bib_item[1]})
-							endif
+							call add(suggestions, {'word': key, 'dup': 0, 'abbr': bib_item[1]})
 						endfor
 					endif
 				endfor
@@ -307,7 +324,7 @@ function! TEXOMNI(findstart, base)  "{{{1
 		elseif text.com_prefix =~ '\\\(ref\|eqref\|pageref\|label\)\s*{'.com_prefix
 			if exists('b:doc_class_line') && b:doc_class_line
 				let file_name = expand("%:p:t")
-			elseif search('\s*\\documentclass','cnw')
+			elseif search('^\s*\\documentclass','cnw')
 				let file_name = expand("%:p:t")
 			else
 				let file_name = '*.tex'
@@ -319,17 +336,40 @@ function! TEXOMNI(findstart, base)  "{{{1
 			let label_item_li = s:TeX_Find_bibref_items(label_pattern,file_name,b:tex_proj_dir,'ref')
 			if text =~ '\\\(ref\|eqref\)\s*{'
 				for label_item in label_item_li
-					call add(suggestions, {'word': label_item[0], 'dup': 1,
+					call add(suggestions, {'word': label_item[0], 'dup': 0,
 								\ 'abbr': label_item[1], 'menu': label_item[2]})
 				endfor
 			else
 				for label_item in label_item_li
-					call add(suggestions, {'word': a:base, 'dup': 1, 'empty': 1,
+					call add(suggestions, {'word': a:base, 'dup': 0, 'empty': 0,
 								\ 'abbr': label_item[1], 'menu': label_item[2]})
 				endfor
 			endif
+		else
+			if !exists('b:omni_com_data_loaded')
+				call s:LoadOmniComData()
+				let b:omni_com_data_loaded = 1
+			endif
+			let command_list = extend(copy(s:tex_commands),s:tex_unicode)
+			for entry in command_list
+				if entry =~ '.*\(\\\|{\|\[\)\s*' . com_prefix
+					let item = substitute(entry, 
+								\ '.\{-}\(\\\|{\|\[\)\s*\ze' . com_prefix, '', '')
+					let comments_pos = stridx(item, '%')
+					if comments_pos == -1
+						let command_cand = item
+						let command_comments = ''
+					else
+						let command_cand = strpart(item, 0, comments_pos)
+						let command_comments = strpart(item, comments_pos)
+					endif
+					let command_cand = trim(command_cand)
+					call add(suggestions, {'word': command_cand, 'dup': 0, 'empty': 0,
+								\ 'menu': command_comments})
+				endif
+			endfor
 		endif
-		execute 'lcd' fnameescape(l:current_cwd)
+		execute 'lcd'. fnameescape(l:current_cwd)
 		if !has('gui_running')
 			redraw!
 		endif

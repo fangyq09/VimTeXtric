@@ -28,6 +28,8 @@ nnoremap [( <Nop>
 nnoremap ]) <Nop>
 nnoremap [] <Nop>
 nnoremap ][ <Nop>
+set completeopt=menu,longest,preview
+inoremap <expr> <CR> pumvisible() ? "\<C-y>" : "\<C-g>u\<CR>"
 "
 function! s:TeX_Jump(mode,bf,...)
 	if a:mode == 'par'

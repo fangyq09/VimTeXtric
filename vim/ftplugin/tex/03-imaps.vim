@@ -80,6 +80,7 @@ let s:MapsComDict = {
 			\ 'cball' : "\\cball",
 			\ 'cite' : "\\cite{<++>}",
 			\ 'dfrac' : "\\dfrac{<++>}{}",
+			\ 'deg' : "\\angdeg{<++>}",
 			\ 'ds' : "\\displaystyle",
 			\ 'eqref' : "\\eqref{eq:<++>}",
 			\ 'exp' : "\\exp\\left(<++>\\right)",
@@ -248,7 +249,7 @@ let s:Maps_envs_abbrv = {
 "}}}
 
 let s:MapsDict = extend(extend(copy(s:MapsEnvDict),s:MapsComDict),s:Mapswordsabbrv)
-let s:Mapsabbrv = extend(copy(s:Maps_commands_abbrv),copy(s:Maps_envs_abbrv))
+let s:Mapsabbrv = extend(copy(s:Maps_commands_abbrv),s:Maps_envs_abbrv)
 
 inoremap <buffer> <C-l>		 <C-r>=<SID>PutEnvironment()<CR>
 
