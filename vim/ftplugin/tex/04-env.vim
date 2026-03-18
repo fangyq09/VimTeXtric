@@ -406,7 +406,7 @@ function! s:TeX_change_env(mode) "{{{
 		let newenv_pre = input('change it to:')
 		if newenv_pre == ''
 			return ''
-		elseif newenv_pre == '\\['
+		elseif newenv_pre == '\['
 			let newenv = ['dmath', '']
 		else
 			let newenv = [newenv_pre, '']
