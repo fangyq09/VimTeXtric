@@ -122,8 +122,12 @@ function! s:TeXViewPDF(pdf_file,source,line,col)
 endfunction
 "}}}
 
+let b:tex_compile_output = []
 "{{{s:TeXCompileCloseHandler
 function! s:TeXCompileCloseHandler(viewpdf,pdf_file,source,line,col,...) 	
+	call setqflist([], 'r', {'lines': b:tex_compile_output, 'efm': &l:efm})
+	let b:tex_compile_output = [] " 清空缓存
+
 	let l:qflist = getqflist()
 	"let ctx = getqflist({'context': 1}).context
 	if empty(l:qflist)
@@ -144,8 +148,14 @@ function! s:TeXCompileCloseHandler(viewpdf,pdf_file,source,line,col,...)
 	endif
 endfunction
 "}}}
-
-function! s:TeXCompileOutHandler(job_id, msg,...) "{{{OutHandler
+function! s:TeXCompileOutHandler(job_id, msg,...)"{{{OutHandler
+    if type(a:msg) == v:t_list
+        call extend(b:tex_compile_output, a:msg)
+    else
+        call add(b:tex_compile_output, a:msg)
+    endif
+endfunction
+function! s:TeXCompileOutHandler_Old(job_id, msg,...) 
 	if has("nvim")
 		call setqflist([], 'a', {'lines': a:msg, 'efm': &l:efm})
 	else

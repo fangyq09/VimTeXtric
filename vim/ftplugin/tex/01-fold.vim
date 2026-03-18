@@ -86,7 +86,8 @@ let s:tex_fold_envs_thm = [
 			\ 'problem',
 			\ 'question', 
 			\ 'solution',
-			\ 'titlepage'
+			\ 'titlepage',
+			\ 'ti'
 			\ ]
 let s:tex_fold_envs_sp= [
 			\ 'verbatim',
