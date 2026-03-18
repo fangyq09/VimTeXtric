@@ -95,6 +95,7 @@ hi texStatement 				guifg=Blue
 hi texString				    guifg=Blue4            
 hi texSpecialChar			guifg=DodgerBlue        
 hi texRefZone					guifg=DeepPink2		      gui=bold 
+hi texRefLabel 				guifg=#b58900 
 hi texCite							guifg=DeepPink4        
 hi texGreek				    guifg=Green4            gui=bold	
 hi texDef					    guifg=DodgerBlue        
