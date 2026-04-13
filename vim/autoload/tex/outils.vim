@@ -8,9 +8,15 @@ function! tex#outils#Vimgrep(filename,pattern) "{{{1
 	let result = []
 	call setqflist([]) " clear quickfix
 	exec 'silent! vimgrep! ?'.a:pattern.'?j '.a:filename
+	"for i in getqflist()
+	"	call add(fns,bufname(i.bufnr))
+	"endfor 
 	for i in getqflist()
-		call add(fns,bufname(i.bufnr))
-	endfor 
+		let l:full_path = fnamemodify(bufname(i.bufnr), ':p')
+		if index(fns, l:full_path) == -1 " 顺便去重
+			call add(fns, l:full_path)
+		endif
+	endfor
 	return fns
 endfunction
 "}}}
@@ -42,7 +48,7 @@ function! s:tex_Prompt(path,file)"{{{
 		call inputsave()
 		let file_choose = inputdialog("Please choose main tex file [".join(num_output,'; ')."]: ",1,0)
 		call inputrestore()
-		if (file_choose < 1) || (file_choose > len(output_new))
+		if (file_choose < 1) || (file_choose > len(output))
 			return ['','']
 		else
 			let file_name = mtf_common[file_choose-1]
