@@ -149,13 +149,13 @@ function! s:TeXCompileCloseHandler(viewpdf,pdf_file,source,line,col,...)
 endfunction
 "}}}
 function! s:TeXCompileOutHandler(job_id, msg,...)"{{{OutHandler
-    if type(a:msg) == v:t_list
-        call extend(b:tex_compile_output, a:msg)
-    else
-        call add(b:tex_compile_output, a:msg)
-    endif
+	if type(a:msg) == v:t_list
+		call extend(b:tex_compile_output, a:msg)
+	else
+		call add(b:tex_compile_output, a:msg)
+	endif
 endfunction
-function! s:TeXCompileOutHandler_Old(job_id, msg,...) 
+function! s:TeXCompileOutHandler_Old(job_id, msg,...) "这个版本会导致编译时光标闪烁
 	if has("nvim")
 		call setqflist([], 'a', {'lines': a:msg, 'efm': &l:efm})
 	else
@@ -302,7 +302,7 @@ function! s:Find_TeX_engine()
 				let tex_engine_com_line = line_num
 				break
 			endif
-			if item =~ '^\s*\\\(setmianfont\|setCJKmainfont\)'
+			if item =~ '^\s*\\\(setmainfont\|setCJKmainfont\)'
 				let xelatex_marker = line_num
 				break
 			endif
