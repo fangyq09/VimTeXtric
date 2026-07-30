@@ -144,7 +144,8 @@ function! s:TeX_Fold_Force() "{{{
 	endif
 	let b:vimtextric_fold_done = 1
 	if g:tex_fold_override_foldtext
-		setlocal foldtext=<SID>TeXFoldText()
+		"exec 'setlocal foldtext=' . expand('<SID>') . 'TeXFoldText()'
+		let &l:foldtext = expand('<SID>') . 'TeXFoldText()'
 	endif
 	setlocal fdm=manual
 	normal! zE
