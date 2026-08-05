@@ -9,7 +9,6 @@ It contains
 - (5) a template plugin: template.vim (~/.vim/ftplugin/tex/template.vim, need ~/.vim/ftplugin/tex/template/), https://www.vim.org/scripts/script.php?script_id=6061
 - (6) a plugin to insert latex commands and environments (~/.vim/ftplugin/tex/imaps.vim)
 - (7) a plugin to change environments (~/.vim/ftplugin/tex/env.vim)
-- (8) a plugin to complete \cite{ and \ref{ (~/.vim/ftplugin/tex/viewer.vim)
 
 ## Usage:
 - (3) for the compile, in normal mode, press F2 to run pdflatex, press F6 to run xelatex, press F8 to compile bibtex.
