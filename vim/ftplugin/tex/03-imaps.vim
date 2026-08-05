@@ -168,7 +168,9 @@ let s:Mapswordsabbrv = {
 			\ 'nbh'     : 'neighborhood',
 			\ 'nhb'     : 'neighborhood',
 			\ 'cech'    : '\v{C}ech',
+			\ 'Cech'    : '\v{C}ech',
 			\ 'holder'  : 'H\"older',
+			\ 'Holder'  : 'H\"older',
 			\ }
 "}}}
 
@@ -259,11 +261,17 @@ function! s:PutEnvironment() "{{{
 	let line_text = getline(".")
 	let text_before = trim(line_text[0:colnum])
 	let ttb_len = len(text_before)
-	let stcn = colnum
+	let current_char = strpart(line_text,colnum-1,1)
+	"补全的前缀的最后一个字符可以是字母、数字以及小括号，中间不会有数字与括号
+	if current_char =~'\d'
+		let stcn = colnum-1
+	else
+		let stcn = colnum
+	endif
 	while stcn > 0
 		let startp = strpart(line_text,stcn-1,1)
 		"从非字母以及小括号的地方结束
-		if startp =~ '[^0-9A-Za-z()]'
+		if startp =~ '[^A-Za-z()]'
 			break
 		else
 		let stcn = stcn - 1
@@ -408,6 +416,9 @@ let s:KeyWDict = {
 			\ 'injto' : '\hookrightarrow', 
 			\ 'wc' : '\rightharpoonup', 
 			\ 'uc' : '\rightrightarrows', 
+			\ 'tt' : '\text{<++>}', 
+			\ 'tw' : '\textwidth', 
+			\ 'th' : '\textsuperscript{th}', 
 			\ 'Thm'   : "Theorem \\ref{thm:<++>}",
 			\ 'Cor'   : "Corollary \\ref{co<++>}",
 			\ 'Prop'   : "Proposition \\ref{prop:<++>}",

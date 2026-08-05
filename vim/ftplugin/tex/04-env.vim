@@ -30,6 +30,7 @@ let s:tex_KeyEnvList = [
 			\ ['ga', 'gathered', ''],
 			\ ['thm', 'theorem', ''],
 			\ ['prop', 'proposition', ''],
+			\ ['def', 'definition', ''],
 			\ ['cor', 'corollary', ''],
 			\ ['le', 'lemma', ''],
 			\ ['re', 'remark', ''],
@@ -435,51 +436,76 @@ let s:tex_add_env_list = {
 			\ 'cor': 'corollary',
 			\ 'le': 'lemma',
 			\ 're': 'remark',
-			\ 'def': 'def',
+			\ 'def': 'definition',
 			\ 'conc': 'conclusion',
+			\}
+
+let s:tex_ch_com_list = {
+			\ 'tt': ['\text{ ', ' }'],
+			\ 'ol': ['\overline{', '}'],
+			\ 'ul': ['\underline{', '}'],
+			\ 'ub': ['\underbrace{', '}_{}'],
+			\ 'ob': ['\overbrace{', '}_{}'],
 			\}
 function! s:TeX_getvisualselection()
   let [lnum1, col1] = getpos("'<")[1:2]
   let [lnum2, col2] = getpos("'>")[1:2]
-  return [lnum1,lnum2]
+  return [lnum1,lnum2,col1,col2]
 endfunction
 
 function! s:TeX_AddEnv() "{{{
-	let line_num = s:TeX_getvisualselection()
+	let sel_range = s:TeX_getvisualselection()
+	let line_num = sel_range[0:1]
+	let col_num = sel_range[2:3]
 	let key_word = input('Insert Env/Command: ')
-	if key_word != ''
-		if has_key(s:tex_add_env_list,key_word)
-			let env_name = get(s:tex_add_env_list,key_word)
-			if env_name == 'center'
-				let env_open= "\\begin{".env_name."}"
-				let env_close= "\\end{".env_name."}"
-			elseif env_name == 'math'
-				let env_open= "\\["
-				let env_close= "\\]"
-			elseif env_name == 'leftright'
-				let env_open= "\\left"
-				let env_close= "\\right"
-			elseif env_name == 'multicol'
-				let env_open= "\\begin{multicols}{2}"
-				let env_close= "\\end{multicols}"
-			elseif env_name == 'figure'
-				let env_open= "\\begin{figure}[H]"
-				let env_close= "\\end{figure}"
-			else
-				let env_open= "\\begin{".env_name."}"
-				let env_close= "\\end{".env_name."}"
-			endif
+	let key_word  = trim(key_word)
+	if key_word == ''
+		return 
+	endif
+	if has_key(s:tex_ch_com_list,key_word)
+		let command = get(s:tex_ch_com_list,key_word)
+		let oldendline = getline(line_num[1])
+		let oldendline_pre = strpart(oldendline,0,col_num[1])
+		let oldendline_post = strpart(oldendline,col_num[1])
+		let newendline = oldendline_pre . commmand[1] . oldendline_post
+		call setline(line_num[1],newendline)
+		let oldstartline = getline(line_num[0])
+		let oldstartline_pre = strpart(oldstartline,0,col_num[0]-1)
+		let oldstartline_post = strpart(oldstartline,col_num[0]-1)
+		let newstartline = oldstartline_pre . command[0] . oldstartline_post
+		call setline(line_num[0],newstartline)
+		return 
+	endif
+	if has_key(s:tex_add_env_list,key_word)
+		let env_name = get(s:tex_add_env_list,key_word)
+		if env_name == 'center'
+			let env_open= "\\begin{".env_name."}"
+			let env_close= "\\end{".env_name."}"
+		elseif env_name == 'math'
+			let env_open= "\\["
+			let env_close= "\\]"
+		elseif env_name == 'leftright'
+			let env_open= "\\left"
+			let env_close= "\\right"
+		elseif env_name == 'multicol'
+			let env_open= "\\begin{multicols}{2}"
+			let env_close= "\\end{multicols}"
+		elseif env_name == 'figure'
+			let env_open= "\\begin{figure}[H]"
+			let env_close= "\\end{figure}"
 		else
-			let env_name = key_word
 			let env_open= "\\begin{".env_name."}"
 			let env_close= "\\end{".env_name."}"
 		endif
-		call append(line_num[1],env_close)
-		call append(line_num[0]-1,env_open)
-		let delta = line_num[1] - line_num[0] + 3
-		silent! exec 'normal! ' . line_num[0] . 'G' . delta . '==' 
+	else
+		let env_name = key_word
+		let env_open= "\\begin{".env_name."}"
+		let env_close= "\\end{".env_name."}"
 	endif
-	return ''
+	call append(line_num[1],env_close)
+	call append(line_num[0]-1,env_open)
+	let delta = line_num[1] - line_num[0] + 3
+	silent! exec 'normal! ' . line_num[0] . 'G' . delta . '==' 
 endfunction
 "}}}
 
