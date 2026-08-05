@@ -427,7 +427,6 @@ endfunction
 let s:tex_add_env_list = {
 			\ 'c': 'center',
 			\ 'm': 'math',
-			\ 'lr': 'leftright',
 			\ 'mc': 'multicol',
 			\ 'fig': 'figure',
 			\ 'tab': 'table',
@@ -446,6 +445,8 @@ let s:tex_ch_com_list = {
 			\ 'ul': ['\underline{', '}'],
 			\ 'ub': ['\underbrace{', '}_{}'],
 			\ 'ob': ['\overbrace{', '}_{}'],
+			\ 'lr': ['\left', '\right'],
+			\ '$': ['$', '$'],
 			\}
 function! s:TeX_getvisualselection()
   let [lnum1, col1] = getpos("'<")[1:2]
@@ -467,7 +468,7 @@ function! s:TeX_AddEnv() "{{{
 		let oldendline = getline(line_num[1])
 		let oldendline_pre = strpart(oldendline,0,col_num[1])
 		let oldendline_post = strpart(oldendline,col_num[1])
-		let newendline = oldendline_pre . commmand[1] . oldendline_post
+		let newendline = oldendline_pre . command[1] . oldendline_post
 		call setline(line_num[1],newendline)
 		let oldstartline = getline(line_num[0])
 		let oldstartline_pre = strpart(oldstartline,0,col_num[0]-1)
@@ -484,9 +485,6 @@ function! s:TeX_AddEnv() "{{{
 		elseif env_name == 'math'
 			let env_open= "\\["
 			let env_close= "\\]"
-		elseif env_name == 'leftright'
-			let env_open= "\\left"
-			let env_close= "\\right"
 		elseif env_name == 'multicol'
 			let env_open= "\\begin{multicols}{2}"
 			let env_close= "\\end{multicols}"
