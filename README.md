@@ -12,7 +12,7 @@ It contains
 
 ## Usage:
 - (3) for the compile, in normal mode, press F2 to run pdflatex, press F6 to run xelatex, press F8 to compile bibtex.
-- (4) for omni completion, press Ctrl-x Ctrl-o; it can be used to coplete commands, input tex files, include pictures, and insert cite or ref
+- (4) for omni completion, press Ctrl-x Ctrl-o; it can be used to complete commands, input tex files, include pictures, and insert cite or ref
 
 ![Screenshot_2023-04-06_18-19-09](https://user-images.githubusercontent.com/20554495/231387805-8bced491-4b10-445f-a3ba-c7fa561baa59.png)
 ![Screenshot_2023-04-06_18-20-09](https://user-images.githubusercontent.com/20554495/231387859-59ba78c8-fbca-48cc-b20f-f6519d034ac2.png)
