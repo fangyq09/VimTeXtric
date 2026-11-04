@@ -118,62 +118,78 @@ function! s:tex_outils_insyntax(name, ...) " {{{1
         \          "synIDattr(v:val, 'name')"),
         \      '^' . a:name) >= 0
 endfunction
+"}}}
+function! s:is_format_boundary(lnum) abort "{{{
+    let l:line = getline(a:lnum)
 
-function! s:format(top, bottom) " {{{1
-	let l:bottom = a:bottom
-	let l:mark = a:bottom
-	for l:current in range(a:bottom, a:top, -1)
-		let l:line = getline(l:current)
+    " Empty lines
+    if l:line =~# '^\s*$'
+        return 1
+    endif
 
-		if s:tex_outils_inmathzone(l:current, 1)
-					\ && s:tex_outils_inmathzone(l:current, col([l:current, '$']))
-			let l:mark = l:current - 1
-			continue
-		endif
+    " Display math delimiters
+    if l:line =~# '^\s*\\\[\s*$'
+                \ || l:line =~# '^\s*\\]\s*$'
+                \ || l:line =~# '^\s*\$\$\s*$'
+        return 1
+    endif
 
-		" Skip all lines with comments
-		if l:line =~# '\v%(^|[^\\])\%'
-			if l:current < l:mark
-				let l:bottom += s:format_build_lines(l:current+1, l:mark)
-			endif
-			let l:mark = l:current - 1
-			continue
-		endif
+    " LaTeX commands
+    if l:line =~# '^\s*\\[A-Za-z@]\+'
+        return 1
+    endif
 
-		" Handle long lines
-		if strdisplaywidth(l:line) > s:textwidth
-			let l:bottom += s:format_build_lines(l:current, l:mark)
-			let l:mark = l:current-1
-		endif
+    " Comments
+    if l:line =~# '%'
+        return 1
+    endif
 
-		if l:line =~# s:border_end
-			if l:current < l:mark
-				let l:bottom += s:format_build_lines(l:current+1, l:mark)
-			endif
-			let l:mark = l:current
-		endif
+    " Math syntax
+    for l:col in range(1, strlen(l:line))
+        if s:tex_outils_inmathzone(a:lnum, l:col)
+            return 1
+        endif
+    endfor
 
-		if l:line =~# s:border_beginning
-			if l:current < l:mark
-				let l:bottom += s:format_build_lines(l:current, l:mark)
-			endif
-			let l:mark = l:current-1
-		endif
-
-		if l:line =~# '^\s*$'
-			let l:bottom += s:format_build_lines(l:current+1, l:mark)
-			let l:mark = l:current-1
-		endif
-	endfor
-
-	if a:top <= l:mark
-		let l:bottom += s:format_build_lines(a:top, l:mark)
-	endif
-
-	return l:bottom
+    return 0
 endfunction
-"
-"" }}}1
+"}}}
+function! s:format(top, bottom) abort "{{{
+    let l:segments = []
+    let l:start = 0
+
+    " First: identify all safe text segments
+    for l:lnum in range(a:top, a:bottom)
+
+        if s:is_format_boundary(l:lnum)
+
+            if l:start > 0
+                call add(l:segments, [l:start, l:lnum - 1])
+                let l:start = 0
+            endif
+
+        elseif l:start == 0
+            let l:start = l:lnum
+        endif
+
+    endfor
+
+    " Last segment
+    if l:start > 0
+        call add(l:segments, [l:start, a:bottom])
+    endif
+
+    " Second: format from bottom to top
+    let l:bottom = a:bottom
+
+    for l:segment in reverse(l:segments)
+        let l:bottom += s:format_build_lines(
+                    \ l:segment[0], l:segment[1])
+    endfor
+
+    return l:bottom
+endfunction
+"}}}
 function! s:format_build_lines(start, end) " {{{1
 	"
 	" Get the desired text to format as a list of words, but preserve the ending
@@ -222,7 +238,6 @@ function! s:format_build_lines(start, end) " {{{1
 endfunction
 
 " }}}1
-
 function! s:compare_lines(new, old) " {{{1
 	let l:min_length = min([len(a:new), len(a:old)])
 	for l:i in range(l:min_length)
