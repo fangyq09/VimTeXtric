@@ -3,7 +3,7 @@
 "      Author: Yangqin Fang
 "       Email: fangyq09@gmail.com
 "     Created: 06/06/2013
-"     Revised: 11/04/2025
+"     Revised: 8/06/2026
 " 	  Version: 3.0 
 " 
 "  Description: A compile plugin for LaTeX
@@ -28,7 +28,8 @@ endif
 "let &l:efm = '%-P**%f,%-P**"%f",%E! LaTeX %trror: %m,%E%f:%l: %m,'
 "			\ . '%E! %m,%Z<argument> %m,%Cl.%l %m,%-G%.%#'
 
-let &l:efm = '%-P**%f,%E%f:%l: %m,%Z<argument> %m,%Cl.%l %m,%-G%.%#'
+let s:tex_efm = '%-P**%f,%E%f:%l: %m,%I%f:%l: %m,%Z<argument> %m,%Cl.%l %m,%-G%.%#'
+let &l:efm = s:tex_efm
 
 function! s:Find_Main_TeX_File() "{{{
 	if exists('b:doc_class_line')  && (b:doc_class_line > 0)
@@ -83,11 +84,11 @@ function! s:ZathuraSynctexForward_lua(pdf,source,line,col)
 		
 		let cmd = 'sh -c ' . shellescape(base_cmd)
 		let execstr = 'zathura -x ' . shellescape(cmd) . ' ' .
-					\ '--synctex-forward=' . input . ' ' . a:pdf . ' &'
+					\ '--synctex-forward=' . input . ' ' . fnameescape(a:pdf) . ' &'
 	else
 		let execstr = 'zathura -x "gvim --servername '.v:servername
 					\ .' --remote-silent +\%{line} \%{input}" --synctex-forward='
-					\ .input.' '.a:pdf.' &'
+					\ .input.' '.fnameescape(a:pdf).' &'
 	endif
   silent call system(execstr)
 endfunction
@@ -120,12 +121,65 @@ function! s:TeXViewPDF(pdf_file,source,line,col)
 		call <SID>SumatraSynctexForward(a:pdf_file,a:source,a:line,a:col)
 	endif
 endfunction
+
+function! s:VectorSnap_SyncTexForward()
+    let tex_file = expand('%:p')
+    let line = line('.')
+    let pdf_file = substitute(tex_file, '\.tex$', '.pdf', '')
+    
+    " 使用 synctex view 提取页码
+    let synctex_arg = printf('%d:1:%s', line, tex_file)
+    let output = system(['synctex', 'view', '-i', synctex_arg, '-o', pdf_file])
+    
+    " 从输出中正则提取 Page 号
+    let page_match = matchstr(output, 'Page:\zs\d+')
+    if !empty(page_match)
+        " 后台启动你的阅读器并指定跳转到对应页
+			if has("nvim")
+        call jobstart(['VectorSnap', pdf_file, '--page', page_match])
+			else
+        call job_start(['VectorSnap', pdf_file, '--page', page_match])
+			endif
+    else
+        echo "SyncTeX forward search failed."
+    endif
+endfunction
+
+nnoremap <silent> <leader>f :call SyncTexForward()<CR>
 "}}}
 
+function! s:CopyFile(src, dst) "{{{
+	if has('win32') || has('win64')
+		let l:ps_cmd = printf('powershell -NoProfile -Command "Copy-Item -LiteralPath ''%s'' -Destination ''%s'' -Force"', a:src, a:dst)
+		call system(l:ps_cmd)
+	else
+		call system('cp ' . shellescape(a:src) . ' ' . shellescape(a:dst))
+	endif
+endfunction
+""}}}
+function! s:KillAdoble() "{{{
+		let kill_adobe_cmd = 'powershell -Command "'
+					\ . '$pdf=\"' . pdf_file . '\";'
+					\ . 'try {'
+					\ . '  $fs = [System.IO.File]::Open($pdf,\"Open\",\"ReadWrite\",\"None\");'
+					\ . '  $fs.Close();'
+					\ . '} catch {'
+					\ . '  Get-Process Acrobat,AcroRd32 -ErrorAction SilentlyContinue | Stop-Process -Force;'
+					\ . '}"'
+		silent! call system(kill_adobe_cmd)
+endfunction
+""}}}
 let b:tex_compile_output = []
 "{{{s:TeXCompileCloseHandler
-function! s:TeXCompileCloseHandler(viewpdf,pdf_file,source,line,col,...) 	
-	call setqflist([], 'r', {'lines': b:tex_compile_output, 'efm': &l:efm})
+function! s:TeXCompileCloseHandler(viewpdf,pdf_file,source,line,col,proj_dir,...) 	
+	"call setqflist([], 'r', {'lines': b:tex_compile_output, 'efm': &l:efm})
+	let l:save_cwd = getcwd()
+	try
+		execute 'cd ' . fnameescape(a:proj_dir)
+		call setqflist([], 'r', { 'lines': b:tex_compile_output, 'efm': s:tex_efm})
+	finally
+		execute 'cd ' . fnameescape(l:save_cwd)
+	endtry
 	let b:tex_compile_output = [] " 清空缓存
 
 	let l:qflist = getqflist()
@@ -133,6 +187,24 @@ function! s:TeXCompileCloseHandler(viewpdf,pdf_file,source,line,col,...)
 	if empty(l:qflist)
 		cclose
 		echom "successfully compiled"
+		if exists('b:tex_out_dir') && b:tex_out_dir !=# ''
+			let l:pdf_name = fnamemodify(a:pdf_file, ':t')
+			let l:src_pdf = fnamemodify(b:tex_proj_dir . '/' . b:tex_out_dir . '/' . l:pdf_name, ':p')
+			let l:src_synctex = fnamemodify(l:src_pdf, ':r') . '.synctex.gz'
+
+			let l:dst_pdf = fnamemodify(a:pdf_file, ':p')
+			let l:dst_synctex = fnamemodify(a:pdf_file, ':r') . '.synctex.gz'
+
+			if filereadable(l:src_synctex)
+				call s:CopyFile(l:src_synctex, l:dst_synctex)
+			endif
+			if filereadable(l:src_pdf)
+				call s:CopyFile(l:src_pdf, l:dst_pdf)
+				"if a:viewpdf 
+				"	silent! call <SID>TeXViewPDF(l:src_pdf,a:source,a:line,a:col)
+				"endif
+			endif
+		endif
 		if a:viewpdf 
 			silent! call <SID>TeXViewPDF(a:pdf_file,a:source,a:line,a:col)
 		endif
@@ -157,11 +229,11 @@ function! s:TeXCompileOutHandler(job_id, msg,...)"{{{OutHandler
 endfunction
 function! s:TeXCompileOutHandler_Old(job_id, msg,...) "这个版本会导致编译时光标闪烁
 	if has("nvim")
-		call setqflist([], 'a', {'lines': a:msg, 'efm': &l:efm})
+		call setqflist([], 'a', {'lines': a:msg, 'efm': s:tex_efm})
 	else
 		call setqflist([], 'a', {
 					\ 'lines': [a:msg],
-					\ 'efm': &l:efm, 
+					\ 'efm': s:tex_efm, 
 					"\ 'context': {'projdir': b:tex_proj_dir}
 					\ })
 	endif
@@ -188,32 +260,24 @@ endfunction
 
 "{{{ RunLaTeX_job(file,dir,engine,view) 
 let b:tex_engine_options = '-synctex=1 -file-line-error -interaction=nonstopmode'
-function! RunLaTeX_job(tex_file,dir,engine,view,track_source,track_line,track_col)
-	let proj_dir = fnameescape(a:dir)
-	let tex_file = fnameescape(a:tex_file)
+function! RunLaTeX_job(tex_file,proj_dir,engine,view,track_source,track_line,track_col, out_dir)
 	let pdf_file = fnamemodify(a:tex_file,':p:r').'.pdf'
 	"切换编译时候的工作目录，错误转跳的时候需要用到
-	execute 'silent! lcd ' . proj_dir 
+	execute 'silent! lcd ' . fnameescape(proj_dir) 
+	let l:out_prm = ''
+	let l:out_dir = trim(a:out_dir)
+	if l:out_dir !=# ''
+			let l:out_prm = ' -output-directory="' . l:out_dir . '"'
+	endif
 	if has('unix')
-		let tex_cmd = 'cd ' . proj_dir . ' && ' . a:engine . ' '
-					\ . b:tex_engine_options. ' ' . tex_file
-		"let tex_cmd =  a:engine . ' ' . b:tex_engine_options . ' ' . tex_file
+		let tex_cmd = 'cd ' . fnameescape(a:proj_dir) . ' && ' . a:engine . ' '
+					\ . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
 		let cmd = ['/bin/sh', '-c', tex_cmd]
 	elseif has('win32') || has('win64')
-		let tex_cmd = 'cd /d ' . proj_dir . ' && ' . a:engine . ' '
-					\ . b:tex_engine_options. ' ' . tex_file
-		"let tex_cmd =  a:engine . ' ' . b:tex_engine_options . ' ' . tex_file
+		let tex_cmd = 'cd /d ' . fnameescape(a:proj_dir) . ' && ' . a:engine . ' '
+					\ . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
 		let cmd = &shell . ' /c ' . tex_cmd
-
-		let kill_adobe_cmd = 'powershell -Command "'
-					\ . '$pdf=\"' . pdf_file . '\";'
-					\ . 'try {'
-					\ . '  $fs = [System.IO.File]::Open($pdf,\"Open\",\"ReadWrite\",\"None\");'
-					\ . '  $fs.Close();'
-					\ . '} catch {'
-					\ . '  Get-Process Acrobat,AcroRd32 -ErrorAction SilentlyContinue | Stop-Process -Force;'
-					\ . '}"'
-		silent! call system(kill_adobe_cmd)
+		silent! call s:KillAdoble()
 	endif
 	call setqflist([])
 	if has("nvim")
@@ -221,14 +285,14 @@ function! RunLaTeX_job(tex_file,dir,engine,view,track_source,track_line,track_co
 					"\ 'on_stderr': function('s:TeXCompileOutHandler'),
 					\ 'on_stdout': function('s:TeXCompileOutHandler'),
 					\ 'on_exit': function('s:TeXCompileCloseHandler', 
-					\ [a:view,pdf_file,a:track_source,a:track_line,a:track_col]),
+					\ [a:view,pdf_file,a:track_source,a:track_line,a:track_col,a:proj_dir]),
 					\ })
 	else
 		let job_options = {
 					\ 'out_io': 'pipe',
 					\ 'out_cb': function('s:TeXCompileOutHandler'),
 					\ 'close_cb': function('s:TeXCompileCloseHandler',
-					\ [a:view,pdf_file,a:track_source,a:track_line,a:track_col]),
+					\ [a:view,pdf_file,a:track_source,a:track_line,a:track_col,a:proj_dir]),
 					\ }
 		let b:run_tex_job = job_start(cmd, job_options)
 	endif
@@ -236,15 +300,24 @@ endfunction
 "}}}
 
 ""{{{ RunLaTeX(file,dir,engine,view)
-function! RunLaTeX(tex_file,dir,engine,view,source,line,col)
+function! RunLaTeX(tex_file,proj_dir,engine,view,source,line,col, out_dir)
 	let dir_old = getcwd()
-	let proj_dir = fnameescape(a:dir)
+	let proj_dir = fnameescape(a:proj_dir)
 	exec 'lcd ' . proj_dir
-	let pdf_file = fnamemodify(a:tex_file,':p:r').'.pdf'
+	"let pdf_file = fnamemodify(a:tex_file,':p:r').'.pdf'
+	let l:out_prm = ''
+	let l:out_dir = trim(a:out_dir)
+	if l:out_dir !=# ''
+		let l:out_prm = ' -output-directory=' . shellescape(l:out_dir)
+		let pdf_file = a:dir . '/' . l:out_dir . '/' . fnamemodify(a:tex_file,':t:r') . '.pdf'
+	else
+		let pdf_file = fnamemodify(a:tex_file,':p:r').'.pdf'
+	endif
 	silent setlocal shellpipe=>
 	call setqflist([]) " clear quickfix
 	let makeprg_old = &makeprg
-	let &makeprg = a:engine.' '.b:tex_engine_options.' '.fnameescape(a:tex_file)
+	"let &makeprg = a:engine.' '.b:tex_engine_options.' '.fnameescape(a:tex_file)
+	let &makeprg = a:engine.' '.b:tex_engine_options . l:out_prm .' '.fnameescape(a:tex_file)
 	silent make!  
 	let &makeprg = makeprg_old
 	exec 'lcd ' . dir_old
@@ -322,7 +395,7 @@ endfunction
 "}}}
 
 "{{{ call RunLaTeX with proper TeX engine
-function! s:Compile_LaTeX_Run(engine,view) 
+function! s:Compile_LaTeX_Run(engine,view,out_dir) 
 	silent write
 	if &ft != 'tex'
 		echomsg "calling RunLaTeX from a non-tex file"
@@ -344,6 +417,17 @@ function! s:Compile_LaTeX_Run(engine,view)
 		return ''
 	endif
 
+	"输出文件夹
+	let b:tex_out_dir = ''
+	let l:clean_out_dir = trim(a:out_dir)
+	if l:clean_out_dir !=# ''
+		let b:tex_out_dir = l:clean_out_dir
+		let l:full_out_path = b:tex_proj_dir . '/' . l:clean_out_dir
+		if getftype(l:full_out_path) !=# 'dir'
+			call mkdir(l:full_out_path, 'p')
+		endif
+	endif
+
 	" choose proper TeX engine
 	if a:engine == 'auto'
 		if !exists('b:tex_engine')
@@ -355,12 +439,16 @@ function! s:Compile_LaTeX_Run(engine,view)
 
 	let pdf_file = fnamemodify(b:tex_main_file_name,':p:r').'.pdf'
 	if has('unix')
-		let pdf_check = 'pgrep -a zathura | grep ' . fnameescape(pdf_file)
-		if empty(system(pdf_check)) && a:view
+		let pdf_name = fnamemodify(pdf_file, ':t')
+		"let check_cmd_zathura = 'pgrep -a zathura | grep ' . fnameescape(pdf_file)
+		"let check_cmd_vectorsnap = 'pgrep -a VectorSnap | grep ' . fnameescape(pdf_file)
+		let check_cmd = '(pgrep -a zathura; pgrep -a VectorSnap) | grep ' . shellescape(pdf_name)
+		let result = system(check_cmd)
+		if empty(result) &&a:view
 			let viewpdf = 1
 		else
 			let viewpdf = 0
-		endif	
+		endif
 	else
 		let viewpdf = a:view
 	endif
@@ -376,7 +464,8 @@ function! s:Compile_LaTeX_Run(engine,view)
 					\ viewpdf,
 					\ track_source,
 					\ track_line,
-					\ track_col
+					\ track_col,
+					\ a:out_dir
 					\ )
 	else
 		if v:version >= 801
@@ -387,7 +476,8 @@ function! s:Compile_LaTeX_Run(engine,view)
 						\ viewpdf,
 						\ track_source,
 						\ track_line,
-						\ track_col
+						\ track_col,
+						\ a:out_dir
 						\ )
 		else
 			silent! call RunLaTeX(
@@ -397,7 +487,8 @@ function! s:Compile_LaTeX_Run(engine,view)
 						\ viewpdf,
 						\ track_source,
 						\ track_line,
-						\ track_col
+						\ track_col,
+						\ a:out_dir
 						\ )
 		endif
 	endif
@@ -432,7 +523,17 @@ function! s:CompileBibTeX()
 			endif
 		endif
 		let l:tex_mfwoe = substitute(l:tex_mfn,"\.tex$","","")
-		silent! exec '!'.b:tex_bib_engine. ' '.fnameescape(l:tex_mfwoe)
+		"silent! exec '!'.b:tex_bib_engine. ' '.fnameescape(l:tex_mfwoe)
+		if b:tex_out_dir !=# ''
+			if b:tex_bib_engine ==# 'biber'
+				let l:bib_cmd = '!' . b:tex_bib_engine . ' --output-directory ' . shellescape(b:tex_out_dir) . ' ' . fnameescape(l:tex_mfwoe)
+			else
+				let l:bib_cmd = '!' . b:tex_bib_engine . ' ' . shellescape(b:tex_out_dir . '/' . l:tex_mfwoe)
+			endif
+		else
+			let l:bib_cmd = '!' . b:tex_bib_engine . ' ' . fnameescape(l:tex_mfwoe)
+		endif
+		silent! exec l:bib_cmd
 		exec 'lcd ' . fnameescape(current_dir)
 		echo 'BibTeX compiled!'
 	else
@@ -552,23 +653,24 @@ function! s:TeX_Compile_Paragraph(engine) "{{{
 		echomsg "compiling the current paragraph with ".b:tex_engine."..."
 		if has("nvim")
 			silent call RunLaTeX_job(tmp_file,tmp_dir,b:tex_engine,1,
-						\ tmp_source,tmp_line,tmp_col)
+						\ tmp_source,tmp_line,tmp_col,'')
 		else
 			if v:version >= 801
 				silent call RunLaTeX_job(tmp_file,tmp_dir,b:tex_engine,1,
-							\ tmp_source,tmp_line,tmp_col)
+							\ tmp_source,tmp_line,tmp_col,'')
 			else
 				silent call RunLaTeX(tmp_file,tmp_dir,b:tex_engine,1,
-							\ tmp_source,tmp_line,tmp_col)
+							\ tmp_source,tmp_line,tmp_col,'')
 			endif
 		endif
 	endif
 endfunction
 "}}}
 
-nnoremap <silent> <buffer><F2>  :call <SID>Compile_LaTeX_Run('auto',1)<CR>
-nnoremap <silent> <buffer><S-F2>  :call <SID>Compile_LaTeX_Run('pdflatex',1)<CR>
-nnoremap <silent> <buffer><F6>  :call <SID>Compile_LaTeX_Run("xelatex",1)<CR> 
+nnoremap <silent> <buffer><F2>  :call <SID>Compile_LaTeX_Run('auto',1,'build')<CR>
+nnoremap <silent> <buffer><S-F2>  :call <SID>Compile_LaTeX_Run('pdflatex',1,'build')<CR>
+nnoremap <silent> <buffer><C-F2>  :call <SID>Compile_LaTeX_Run('pdflatex',1,'')<CR>
+nnoremap <silent> <buffer><F6>  :call <SID>Compile_LaTeX_Run("xelatex",1,'build')<CR> 
 nnoremap <silent> <buffer><F8> :call <SID>CompileBibTeX()<CR>
 nnoremap <silent> <buffer><C-c> : call <SID>TeXCancelJob()<CR>
 nnoremap <silent> <buffer><F3> : call <SID>TeX_Compile_Paragraph('auto')<CR>
@@ -576,9 +678,9 @@ nnoremap <silent> <buffer><F3> : call <SID>TeX_Compile_Paragraph('auto')<CR>
 menu 8000.60.040 &LaTeX.&DVI\ To\ PDF<tab><C-F6>  
 			\ :call <SID>DviToPDF(expand("%:r").".dvi")<CR>
 menu 8000.60.050 &LaTeX.&XeLaTeX<tab><F6> 
-			\ :call <SID>Compile_LaTeX_Run("xelatex",1)<CR>
+			\ :call <SID>Compile_LaTeX_Run("xelatex",1,'')<CR>
 menu 8000.60.060 &LaTeX.&pdfLaTeX<tab><S-F2> 
-			\ :call <SID>Compile_LaTeX_Run("pdflatex",1)<CR>
+			\ :call <SID>Compile_LaTeX_Run("pdflatex",1,'')<CR>
 menu 8000.60.070 &LaTeX.&Compile\ BibTeX<tab><F8>		
 			\ :call <SID>CompileBibTeX()<CR>
 menu 8000.60.080 &LaTeX.&Compile\ Asy<tab><C-F8>		
