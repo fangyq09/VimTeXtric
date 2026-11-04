@@ -4,18 +4,36 @@ if exists('b:rust_misc')
 endif
 let b:rust_misc = 1
 
-let b:cargo_prog = expand('~/.cargo/bin/cargo')
+"let b:cargo_prog = expand('~/.cargo/bin/cargo')
+if has('win32') || has('win64')
+	let b:cargo_prog = expand('$USERPROFILE/.cargo/bin/cargo.exe')
+	let s:shell_cmd = ['cmd.exe', '/c']
+else
+	let b:cargo_prog = expand('~/.cargo/bin/cargo')
+	let s:shell_cmd = ['/bin/sh', '-c']
+endif
+
 let s:rust_build_buf = -1
 let s:rust_build_status = -1
 
 " Find project root by searching upward for Cargo.toml
 function! s:FindProjectRoot()
 	let l:dir = expand('%:p:h')
-	while l:dir !=# '/'
+	"while l:dir !=# '/'
+	"	if filereadable(l:dir . '/Cargo.toml')
+	"		return l:dir
+	"	endif
+	"	let l:dir = fnamemodify(l:dir, ':h')
+	"endwhile
+	while 1
 		if filereadable(l:dir . '/Cargo.toml')
 			return l:dir
 		endif
-		let l:dir = fnamemodify(l:dir, ':h')
+		let l:parent = fnamemodify(l:dir, ':h')
+		if l:parent ==# l:dir
+			break
+		endif
+		let l:dir = l:parent
 	endwhile
 	return ''
 endfunction
@@ -63,7 +81,8 @@ function! s:RustRun(type)
 	" Clear quickfix before starting
 	call setqflist([])
 
-	let l:cmd = ['/bin/sh', '-c', b:cargo_prog . ' ' . a:type]
+	"let l:cmd = ['/bin/sh', '-c', b:cargo_prog . ' ' . a:type]
+	let l:cmd = s:shell_cmd + [b:cargo_prog . ' ' . a:type]
 
 	echo "Running cargo " . a:type . " in " . l:root
 
@@ -133,7 +152,8 @@ function! s:RustBuild(type,copen) abort
 	" Clear quickfix before starting
 	call setqflist([])
 
-	let l:cmd = ['/bin/sh', '-c', b:cargo_prog . ' ' . a:type]
+	"let l:cmd = ['/bin/sh', '-c', b:cargo_prog . ' ' . a:type]
+	let l:cmd = s:shell_cmd + [b:cargo_prog . ' ' . a:type]
 
 	echo "Running cargo " . a:type . " in " . l:root
 
