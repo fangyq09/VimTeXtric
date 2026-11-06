@@ -24,8 +24,12 @@ let b:loaded_vimtextric_compile = 1
 if has("win32") || has("win64")
 	set shellslash
 	let b:default_pdfviewer = "sumatra"
+	let s:tex_cmd_term = ['cmd.exe', '/c']
 elseif has("unix")
 	let b:default_pdfviewer = "zathura"
+	let s:tex_cmd_term = ['/bin/sh', '-c']
+	let b:pdf_prog =expand('~/.local/bin/VectorSnap')
+	"let b:pdf_prog =expand('/home/fang/rust/pdf/target/debug/VectorSnap')
 endif 
 
 "let &l:efm = '%-P**%f,%-P**"%f",%E! LaTeX %trror: %m,%E%f:%l: %m,'
@@ -35,6 +39,7 @@ let s:tex_efm = '%-P**%f,%E%f:%l: %m,%I%f:%l: %m,%Z<argument> %m,%Cl.%l %m,%-G%.
 let &l:efm = s:tex_efm
 let b:tex_engine_options = '-synctex=1 -file-line-error -interaction=nonstopmode'
 let b:tex_compile_output = []
+let b:tex_out_dir = ''
 
 function! s:Find_Main_TeX_File() "{{{
 	if exists('b:doc_class_line')  && (b:doc_class_line > 0)
@@ -49,7 +54,7 @@ endfunction
 "}}}
 
 "ViewPDF{{{
-function! s:SumatraSynctexForward(pdf,source,line,col)
+function! s:SumatraSynctexForward(pdf,source,line,col,...)
 	"silent execute '!start SumatraPDF -reuse-instance '.fnameescape(a:pdf).' -forward-search "'.a:source.'" '.a:line
 	if !exists('b:pdf_prog') || (b:pdf_prog == '')
 		if !exists('g:pdf_prog')
@@ -73,12 +78,19 @@ function! s:SumatraSynctexForward(pdf,source,line,col)
 	endif
 endfunction
 
-function! s:ZathuraSynctexForward_lua(pdf,source,line,col)
+function! s:ZathuraSynctexForward_lua(pdf,source,line,col,...)
+    let l:target_pdf = a:pdf
+    let l:build_dir = a:0 > 0 ? a:1 : ''
+		if !empty(l:build_dir)
+        let l:dir = fnamemodify(a:pdf, ':h')
+        let l:tail = fnamemodify(a:pdf, ':t')
+        let l:target_pdf = (l:dir == '.' ? '' : l:dir . '/') . l:build_dir . '/' . l:tail
+    endif
 	let input = shellescape(a:line.":".a:col.":".a:source)
 	if has("nvim")
 		"let execstr_simple = 'zathura -x "nvim --server ' . v:servername
 		"			\ . ' --remote-expr ''v:lua.jump_to_line(\"%{input}\", %{line})''" '
-		"      \ . '--synctex-forward=' . input . ' ' . a:pdf . ' &'
+		"      \ . '--synctex-forward=' . input . ' ' . l:target_pdf . ' &'
 		let base_cmd =
 					\ 'if [ -S ' . v:servername . ' ]; then ' .
 					\ 'nvim --server ' . v:servername .
@@ -89,15 +101,22 @@ function! s:ZathuraSynctexForward_lua(pdf,source,line,col)
 		
 		let cmd = 'sh -c ' . shellescape(base_cmd)
 		let execstr = 'zathura -x ' . shellescape(cmd) . ' ' .
-					\ '--synctex-forward=' . input . ' ' . fnameescape(a:pdf) . ' &'
+					\ '--synctex-forward=' . input . ' ' . fnameescape(l:target_pdf) . ' &'
 	else
 		let execstr = 'zathura -x "gvim --servername '.v:servername
 					\ .' --remote-silent +\%{line} \%{input}" --synctex-forward='
-					\ .input.' '.fnameescape(a:pdf).' &'
+					\ .input.' '.fnameescape(l:target_pdf).' &'
 	endif
   silent call system(execstr)
 endfunction
-function! s:ZathuraSynctexForward(pdf,source,line,col)
+function! s:ZathuraSynctexForward(pdf,source,line,col,...)
+	let l:target_pdf = a:pdf
+	"let l:build_dir = a:0 > 0 ? a:1 : ''
+	"if !empty(l:build_dir)
+	"	let l:dir = fnamemodify(a:pdf, ':h')
+	"	let l:tail = fnamemodify(a:pdf, ':t')
+	"	let l:target_pdf = (l:dir == '.' ? '' : l:dir . '/') . l:build_dir . '/' . l:tail
+	"endif
 	let input = shellescape(a:line . ":" . a:col . ":" . a:source)
 	if has("nvim")
 		let base_cmd =
@@ -110,98 +129,113 @@ function! s:ZathuraSynctexForward(pdf,source,line,col)
 
 		let cmd = 'sh -c ' . shellescape(base_cmd)
 		let execstr = 'zathura -x ' . shellescape(cmd) . ' ' .
-					\ '--synctex-forward=' . input . ' ' . fnameescape(a:pdf) . ' &'
+					\ '--synctex-forward=' . input . ' ' . fnameescape(l:target_pdf) . ' &'
 	else
 		let execstr = 'zathura -x "gvim --servername '.v:servername
 					\ .' --remote-silent +\%{line} \%{input}" --synctex-forward='
-					\ . input . ' ' . fnameescape(a:pdf) . ' &'
+					\ . input . ' ' . fnameescape(l:target_pdf) . ' &'
 	endif
   silent call system(execstr)
 endfunction
 
-function! s:TeXViewPDF(viewer, pdf_file,source,line,col)
+function! s:TeXViewPDF(viewer, pdf_file,source,line,col,build_dir)
 	if a:viewer == 'zathura'
-		call <SID>ZathuraSynctexForward(a:pdf_file,a:source,a:line,a:col)
+		call <SID>ZathuraSynctexForward(a:pdf_file,a:source,a:line,a:col,a:build_dir)
 	elseif a:viewer == 'vectorsnap'
-		call <SID>VectorSnap_SynctexForward(a:pdf_file,a:source,a:line,a:col)
+		call <SID>VectorSnap_SynctexForward(a:pdf_file,a:source,a:line,a:col,a:build_dir)
 	elseif a:viewer == 'sumatra'
-		call <SID>SumatraSynctexForward(a:pdf_file,a:source,a:line,a:col)
+		call <SID>SumatraSynctexForward(a:pdf_file,a:source,a:line,a:col,a:build_dir)
 	endif
 endfunction
 
-function! s:VectorSnap_SyncTexForward(pdf_file,source,line,col)
+function! s:VectorSnap_SynctexForward(pdf_file,source,line,col,build_dir)
     " 使用 synctex view 提取页码
     let synctex_arg = printf('%d:1:%s', a:line, a:source)
-    let output = system(['synctex', 'view', '-i', synctex_arg, '-o', a:pdf_file])
-    
+		let l:target_pdf = a:pdf_file
+		"let l:out_dir = trim(a:build_dir)
+		"if !empty(l:out_dir)
+    "    let l:dir = fnamemodify(a:pdf_file, ':h')
+    "    let l:tail = fnamemodify(a:pdf_file, ':t')
+    "    let l:target_pdf = (l:dir == '.' ? '' : l:dir . '/') . l:out_dir . '/' . l:tail
+    "endif
     " 从输出中正则提取 Page 号
-    let page_match = matchstr(output, 'Page:\zs\d+')
+		let syn_cmd = 'synctex view -i ' . shellescape(l:synctex_arg) . ' -o ' . shellescape(l:target_pdf)
+		let output = system(syn_cmd)
+		let page_match = matchstr(output, '\vPage:\zs\d+')
+		if exists(b:pdf_prog)
+			let l:pdf_viewer_prog = b:pdf_prog
+		else
+			let l:pdf_viewer_prog = 'VectorSnap'
+		endif 
     if !empty(page_match)
-        " 后台启动你的阅读器并指定跳转到对应页
-			if has("nvim")
-        call jobstart(['VectorSnap', a:pdf_file, '--page', page_match])
-			else
-        call job_start(['VectorSnap', a:pdf_file, '--page', page_match])
-			endif
-    else
-        echo "SyncTeX forward search failed."
+			let execstr = pdf_viewer_prog.' '.fnameescape(a:pdf_file).' --page='.page_match .' &'
+			silent call system(execstr)
+		else
+			let execstr = pdf_viewer_prog . ' ' . fnameescape(a:pdf_file). ' &'
+			silent call system(execstr)
     endif
 endfunction
 "}}}
 
 "{{{ Detect which viewer is opening the specified PDF
 function! s:GetPDFViewer(pdf_file)
-    let l:pdf = fnamemodify(a:pdf_file, ':p')
+	let l:pdf = fnamemodify(a:pdf_file, ':t')
 
-    if has('unix')
-        " Get all running processes.
-        let l:processes = systemlist('ps -eo comm=,args=')
+	if has('unix')
+		" Get all running processes.
+		let l:processes = systemlist('ps -eo comm=,args=')
 
-        " Viewer process names and returned identifiers.
-        let l:viewers = [
-                    \ ['zathura',    'zathura'],
-                    \ ['VectorSnap', 'vectorsnap'],
-                    \ ['evince',     'evince'],
-                    \ ['okular',     'okular'],
-                    \ ['atril',      'atril'],
-                    \ ['mupdf',      'mupdf'],
-                    \ ]
+		" Viewer process names and returned identifiers.
+		let l:viewers = [
+					\ ['zathura',    'zathura'],
+					\ ['VectorSnap', 'vectorsnap'],
+					\ ['evince',     'evince'],
+					\ ['okular',     'okular'],
+					\ ['atril',      'atril'],
+					\ ['mupdf',      'mupdf'],
+					\ ]
 
-        for l:process in l:processes
-            " Check whether the process belongs to a supported viewer.
-            for l:viewer in l:viewers
-                if l:process =~? '\V' . l:viewer[0]
-                    " Check whether this process is opening this PDF.
-                    if stridx(l:process, l:pdf) >= 0
-                        return l:viewer[1]
-                    endif
-                endif
-            endfor
-        endfor
+		for l:process in l:processes
+			" Check whether the process belongs to a supported viewer.
+			for l:viewer in l:viewers
+				if l:process =~? '\V' . l:viewer[0]
+					" Check whether this process is opening this PDF.
+					if stridx(l:process, l:pdf) >= 0 
+						return l:viewer[1]
+					elseif l:viewer[0] ==# 'VectorSnap'
+						" 用 lsof 细查它是否打开了当前 PDF
+						let l:lsof_output = system('lsof -t -c VectorSnap -- ' . shellescape(l:pdf))
+						if !empty(l:lsof_output)
+							return l:viewer[1]
+						endif
+					endif
+				endif
+			endfor
+		endfor
 
-    elseif has('win32') || has('win64')
-        " Query Windows processes.
-        let l:ps = 'powershell -NoProfile -Command "'
-                    \ . '$pdf = ''' . substitute(l:pdf, "'", "''", 'g') . ''';'
-                    \ . 'Get-CimInstance Win32_Process | '
-                    \ . 'Where-Object { $_.CommandLine -and '
-                    \ . '$_.CommandLine.Contains($pdf) } | '
-                    \ . 'Select-Object -ExpandProperty Name"'
+	elseif has('win32') || has('win64')
+		" Query Windows processes.
+		let l:ps = 'powershell -NoProfile -Command "'
+					\ . '$pdf = ''' . substitute(l:pdf, "'", "''", 'g') . ''';'
+					\ . 'Get-CimInstance Win32_Process | '
+					\ . 'Where-Object { $_.CommandLine -and '
+					\ . '$_.CommandLine.Contains($pdf) } | '
+					\ . 'Select-Object -ExpandProperty Name"'
 
-        let l:processes = systemlist(l:ps)
+		let l:processes = systemlist(l:ps)
 
-        for l:process in l:processes
-            if l:process =~? 'SumatraPDF'
-                return 'sumatra'
-            elseif l:process =~? 'Acrobat'
-                        \ || l:process =~? 'AcroRd32'
-                return 'adobe'
-            endif
-        endfor
-    endif
+		for l:process in l:processes
+			if l:process =~? 'SumatraPDF'
+				return 'sumatra'
+			elseif l:process =~? 'Acrobat'
+						\ || l:process =~? 'AcroRd32'
+				return 'adobe'
+			endif
+		endfor
+	endif
 
-    " This PDF is not currently opened by a supported viewer.
-    return ''
+	" This PDF is not currently opened by a supported viewer.
+	return ''
 endfunction
 "}}}
 "
@@ -226,8 +260,8 @@ function! s:KillAdoble(pdf_file) "{{{
 		silent! call system(kill_adobe_cmd)
 endfunction
 ""}}}
-"{{{s:TeXCompileCloseHandler
-function! s:TeXCompileCloseHandler(pdfviewer,proj_dir,pdf_file,source,line,col,...) 	
+"{{{function! s:TeXCompileCloseHandler
+function! s:TeXCompileCloseHandler(pdfviewer,proj_dir,pdf_file,source,line,col,out_dir,...) 	
 	"call setqflist([], 'r', {'lines': b:tex_compile_output, 'efm': &l:efm})
 	let l:save_cwd = getcwd()
 	try
@@ -243,14 +277,15 @@ function! s:TeXCompileCloseHandler(pdfviewer,proj_dir,pdf_file,source,line,col,.
 	if empty(l:qflist)
 		cclose
 		echom "successfully compiled"
-		if exists('b:tex_out_dir') && b:tex_out_dir !=# ''
+		let l:out_dir = trim(a:out_dir)
+		if l:out_dir !=# ''
+		"if exists('b:tex_out_dir') && b:tex_out_dir !=# ''
 			let l:pdf_name = fnamemodify(a:pdf_file, ':t')
-			let l:src_pdf = fnamemodify(b:tex_proj_dir . '/' . b:tex_out_dir . '/' . l:pdf_name, ':p')
-			let l:src_synctex = fnamemodify(l:src_pdf, ':r') . '.synctex.gz'
-
+			let l:src_pdf = fnamemodify(a:proj_dir . '/' . a:out_dir . '/' . l:pdf_name, ':p')
 			let l:dst_pdf = fnamemodify(a:pdf_file, ':p')
-			let l:dst_synctex = fnamemodify(a:pdf_file, ':r') . '.synctex.gz'
 
+			let l:src_synctex = fnamemodify(l:src_pdf, ':r') . '.synctex.gz'
+			let l:dst_synctex = fnamemodify(a:pdf_file, ':r') . '.synctex.gz'
 			if filereadable(l:src_synctex)
 				call s:CopyFile(l:src_synctex, l:dst_synctex)
 			endif
@@ -259,7 +294,7 @@ function! s:TeXCompileCloseHandler(pdfviewer,proj_dir,pdf_file,source,line,col,.
 			endif
 		endif
 		if !empty(a:pdfviewer)
-			silent! call <SID>TeXViewPDF(a:pdfviewer,a:pdf_file,a:source,a:line,a:col)
+			silent! call <SID>TeXViewPDF(a:pdfviewer,a:pdf_file,a:source,a:line,a:col,a:out_dir)
 		endif
 	else 
 		copen 5      " open quickfix window
@@ -321,14 +356,22 @@ function! RunLaTeX_job(tex_file,proj_dir,engine,viewer,track_source,track_line,t
 	if l:out_dir !=# ''
 			let l:out_prm = ' -output-directory="' . l:out_dir . '"'
 	endif
-	if has('unix')
-		let tex_cmd = 'cd ' . fnameescape(a:proj_dir) . ' && ' . a:engine . ' '
-					\ . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
-		let cmd = ['/bin/sh', '-c', tex_cmd]
-	elseif has('win32') || has('win64')
-		let tex_cmd = 'cd /d ' . fnameescape(a:proj_dir) . ' && ' . a:engine . ' '
-					\ . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
-		let cmd = &shell . ' /c ' . tex_cmd
+	"if has('unix')
+	"	let tex_cmd = 'cd ' . fnameescape(a:proj_dir) . ' && ' . a:engine . ' '
+	"				\ . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
+	"	let cmd = ['/bin/sh', '-c', tex_cmd]
+	"elseif has('win32') || has('win64')
+	"	let tex_cmd = 'cd /d ' . fnameescape(a:proj_dir) . ' && ' . a:engine . ' '
+	"				\ . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
+	"	let cmd = &shell . ' /c ' . tex_cmd
+	"	let current_viewer = s:GetPDFViewer(pdf_file)
+	"	if current_viewer ==# 'adobe'
+	"		silent! call <SID>KillAdoble(pdf_file)
+	"	endif
+	"endif
+	let tex_cmd_opt = a:engine . ' ' . b:tex_engine_options . l:out_prm . ' ' . fnameescape(a:tex_file)
+	let cmd = s:tex_cmd_term + [tex_cmd_opt]
+	if has("win32") || has("win64")
 		let current_viewer = s:GetPDFViewer(pdf_file)
 		if current_viewer ==# 'adobe'
 			silent! call <SID>KillAdoble(pdf_file)
@@ -336,18 +379,21 @@ function! RunLaTeX_job(tex_file,proj_dir,engine,viewer,track_source,track_line,t
 	endif
 	call setqflist([])
 	if has("nvim")
-		let b:run_tex_job = jobstart(cmd, {
+		let job_options = {
+					\ 'cwd': fnameescape(a:proj_dir),
 					"\ 'on_stderr': function('s:TeXCompileOutHandler'),
 					\ 'on_stdout': function('s:TeXCompileOutHandler'),
 					\ 'on_exit': function('s:TeXCompileCloseHandler', 
-					\ [a:viewer,a:proj_dir,pdf_file,a:track_source,a:track_line,a:track_col]),
-					\ })
+					\ [a:viewer,a:proj_dir,pdf_file,a:track_source,a:track_line,a:track_col,a:out_dir]),
+					\ }
+		let b:run_tex_job = jobstart(cmd, job_options)
 	else
 		let job_options = {
+					\ 'cwd': fnameescape(a:proj_dir),
 					\ 'out_io': 'pipe',
 					\ 'out_cb': function('s:TeXCompileOutHandler'),
 					\ 'close_cb': function('s:TeXCompileCloseHandler',
-					\ [a:viewer,a:proj_dir,pdf_file,a:track_source,a:track_line,a:track_col]),
+					\ [a:viewer,a:proj_dir,pdf_file,a:track_source,a:track_line,a:track_col,a:out_dir]),
 					\ }
 		let b:run_tex_job = job_start(cmd, job_options)
 	endif
@@ -473,7 +519,6 @@ function! s:Compile_LaTeX_Run(engine,viewer,out_dir)
 	endif
 
 	"输出文件夹
-	let b:tex_out_dir = ''
 	let l:clean_out_dir = trim(a:out_dir)
 	if l:clean_out_dir !=# ''
 		let b:tex_out_dir = l:clean_out_dir
@@ -493,17 +538,10 @@ function! s:Compile_LaTeX_Run(engine,viewer,out_dir)
 	endif
 
 	let pdf_file = fnamemodify(b:tex_main_file_name,':p:r').'.pdf'
-	"if has('unix')
 	"	let pdf_name = fnamemodify(pdf_file, ':t')
-	"	"let check_cmd_zathura = 'pgrep -a zathura | grep ' . fnameescape(pdf_file)
-	"	"let check_cmd_vectorsnap = 'pgrep -a VectorSnap | grep ' . fnameescape(pdf_file)
-	"	"let check_cmd = '(pgrep -a zathura; pgrep -a VectorSnap) | grep ' . shellescape(pdf_name)
-	"	"let result = system(check_cmd)
-	"else
-	"	let pdfviewer = a:viewer
-	"endif
 	let result = s:GetPDFViewer(pdf_file)
 	if empty(result) && !empty(a:viewer)
+	"if empty(result) 
 		let pdfviewer = a:viewer
 	else
 		let pdfviewer = result
