@@ -26,10 +26,9 @@ if has("win32") || has("win64")
 	let b:default_pdfviewer = "sumatra"
 	let s:tex_cmd_term = ['cmd.exe', '/c']
 elseif has("unix")
-	let b:default_pdfviewer = "zathura"
+	let b:default_pdfviewer = "vectorsnap"
 	let s:tex_cmd_term = ['/bin/sh', '-c']
 	let b:pdf_prog =expand('~/.local/bin/VectorSnap')
-	"let b:pdf_prog =expand('/home/fang/rust/pdf/target/debug/VectorSnap')
 endif 
 
 "let &l:efm = '%-P**%f,%-P**"%f",%E! LaTeX %trror: %m,%E%f:%l: %m,'
@@ -39,7 +38,7 @@ let s:tex_efm = '%-P**%f,%E%f:%l: %m,%I%f:%l: %m,%Z<argument> %m,%Cl.%l %m,%-G%.
 let &l:efm = s:tex_efm
 let b:tex_engine_options = '-synctex=1 -file-line-error -interaction=nonstopmode'
 let b:tex_compile_output = []
-let b:tex_out_dir = ''
+let b:tex_out_dir = 'build'
 
 function! s:Find_Main_TeX_File() "{{{
 	if exists('b:doc_class_line')  && (b:doc_class_line > 0)
@@ -152,12 +151,12 @@ function! s:VectorSnap_SynctexForward(pdf_file,source,line,col,build_dir)
     " 使用 synctex view 提取页码
     let synctex_arg = printf('%d:1:%s', a:line, a:source)
 		let l:target_pdf = a:pdf_file
-		"let l:out_dir = trim(a:build_dir)
-		"if !empty(l:out_dir)
-    "    let l:dir = fnamemodify(a:pdf_file, ':h')
-    "    let l:tail = fnamemodify(a:pdf_file, ':t')
-    "    let l:target_pdf = (l:dir == '.' ? '' : l:dir . '/') . l:out_dir . '/' . l:tail
-    "endif
+		let l:out_dir = trim(a:build_dir)
+		if !empty(l:out_dir)
+        let l:dir = fnamemodify(a:pdf_file, ':h')
+        let l:tail = fnamemodify(a:pdf_file, ':t')
+        let l:target_pdf = (l:dir == '.' ? '' : l:dir . '/') . l:out_dir . '/' . l:tail
+    endif
     " 从输出中正则提取 Page 号
 		let syn_cmd = 'synctex view -i ' . shellescape(l:synctex_arg) . ' -o ' . shellescape(l:target_pdf)
 		let output = system(syn_cmd)
@@ -168,6 +167,7 @@ function! s:VectorSnap_SynctexForward(pdf_file,source,line,col,build_dir)
 			let l:pdf_viewer_prog = 'VectorSnap'
 		endif 
     if !empty(page_match)
+			"let page_match = str2nr(page_match) + 1
 			let execstr = pdf_viewer_prog.' '.fnameescape(a:pdf_file).' --page='.page_match .' &'
 			silent call system(execstr)
 		else
@@ -202,12 +202,12 @@ function! s:GetPDFViewer(pdf_file)
 					" Check whether this process is opening this PDF.
 					if stridx(l:process, l:pdf) >= 0 
 						return l:viewer[1]
-					elseif l:viewer[0] ==# 'VectorSnap'
-						" 用 lsof 细查它是否打开了当前 PDF
-						let l:lsof_output = system('lsof -t -c VectorSnap -- ' . shellescape(l:pdf))
-						if !empty(l:lsof_output)
-							return l:viewer[1]
-						endif
+					"elseif l:viewer[0] ==# 'VectorSnap'
+					"	" 用 lsof 细查它是否打开了当前 PDF
+					"	let l:lsof_output = system('lsof -t -c VectorSnap -- ' . shellescape(l:pdf))
+					"	if !empty(l:lsof_output)
+					"		return l:viewer[1]
+					"	endif
 					endif
 				endif
 			endfor
@@ -279,7 +279,6 @@ function! s:TeXCompileCloseHandler(pdfviewer,proj_dir,pdf_file,source,line,col,o
 		echom "successfully compiled"
 		let l:out_dir = trim(a:out_dir)
 		if l:out_dir !=# ''
-		"if exists('b:tex_out_dir') && b:tex_out_dir !=# ''
 			let l:pdf_name = fnamemodify(a:pdf_file, ':t')
 			let l:src_pdf = fnamemodify(a:proj_dir . '/' . a:out_dir . '/' . l:pdf_name, ':p')
 			let l:dst_pdf = fnamemodify(a:pdf_file, ':p')
@@ -513,7 +512,7 @@ function! s:Compile_LaTeX_Run(engine,viewer,out_dir)
 	endif
 	if b:tex_main_file_name == ''
 		echohl WarningMsg
-		echomsg "No main tex file be found!"
+		echomsg "No main tex file!"
 		echohl None
 		return ''
 	endif
@@ -521,7 +520,6 @@ function! s:Compile_LaTeX_Run(engine,viewer,out_dir)
 	"输出文件夹
 	let l:clean_out_dir = trim(a:out_dir)
 	if l:clean_out_dir !=# ''
-		let b:tex_out_dir = l:clean_out_dir
 		let l:full_out_path = b:tex_proj_dir . '/' . l:clean_out_dir
 		if getftype(l:full_out_path) !=# 'dir'
 			call mkdir(l:full_out_path, 'p')
@@ -542,7 +540,7 @@ function! s:Compile_LaTeX_Run(engine,viewer,out_dir)
 	let result = s:GetPDFViewer(pdf_file)
 	if empty(result) && !empty(a:viewer)
 	"if empty(result) 
-		let pdfviewer = a:viewer
+		let pdfviewer = tolower(a:viewer)
 	else
 		let pdfviewer = result
 	endif
@@ -601,7 +599,7 @@ endfunction
 ""}}}
 
 "Compile BibTeX{{{1
-function! s:CompileBibTeX()
+function! s:CompileBibTeX(out_dir)
 	if !exists('b:tex_main_file_name')  || !exists('b:tex_proj_dir')|| (b:tex_main_file_name == '')
 		let [b:tex_main_file_name,b:tex_proj_dir] = s:Find_Main_TeX_File()
 	endif
@@ -616,22 +614,21 @@ function! s:CompileBibTeX()
 				let b:tex_bib_engine = 'bibtex'
 			endif
 		endif
-		let l:tex_mfwoe = substitute(l:tex_mfn,"\.tex$","","")
-		"silent! exec '!'.b:tex_bib_engine. ' '.fnameescape(l:tex_mfwoe)
-		if exists('b:tex_out_dir') && b:tex_out_dir !=# ''
+		let l:clean_out_dir = trim(a:out_dir)
+		if l:clean_out_dir !=# ''
 			if b:tex_bib_engine ==# 'biber'
-				let l:bib_cmd = '!' . b:tex_bib_engine . ' --output-directory ' . shellescape(b:tex_out_dir) . ' ' . fnameescape(l:tex_mfwoe)
+				let l:bib_cmd = '!' . b:tex_bib_engine . ' --output-directory ' . shellescape(l:clean_out_dir) . ' ' . fnameescape(b:tex_proj_dir)
 			else
-				let l:bib_cmd = '!' . b:tex_bib_engine . ' ' . shellescape(b:tex_out_dir . '/' . l:tex_mfwoe)
+				let l:bib_cmd = '!' . b:tex_bib_engine . ' ' . shellescape(l:clean_out_dir . '/' . b:tex_proj_dir)
 			endif
 		else
-			let l:bib_cmd = '!' . b:tex_bib_engine . ' ' . fnameescape(l:tex_mfwoe)
+			let l:bib_cmd = '!' . b:tex_bib_engine . ' ' . fnameescape(b:tex_proj_dir)
 		endif
 		silent! exec l:bib_cmd
 		exec 'lcd ' . fnameescape(current_dir)
 		echo 'BibTeX compiled!'
 	else
-		echomsg "no main file be found"
+		echomsg "no main tex file!"
 	endif
 endfunction
 "}}}1
@@ -765,7 +762,7 @@ nnoremap <silent> <buffer><F2>  :call <SID>Compile_LaTeX_Run('auto',b:default_pd
 nnoremap <silent> <buffer><S-F2>  :call <SID>Compile_LaTeX_Run('pdflatex',b:default_pdfviewer,'build')<CR>
 nnoremap <silent> <buffer><C-F2>  :call <SID>Compile_LaTeX_Run('pdflatex',b:default_pdfviewer,'')<CR>
 nnoremap <silent> <buffer><F6>  :call <SID>Compile_LaTeX_Run("xelatex",b:default_pdfviewer,'build')<CR> 
-nnoremap <silent> <buffer><F8> :call <SID>CompileBibTeX()<CR>
+nnoremap <silent> <buffer><F8> :call <SID>CompileBibTeX('build')<CR>
 nnoremap <silent> <buffer><C-c> : call <SID>TeXCancelJob()<CR>
 nnoremap <silent> <buffer><F3> : call <SID>TeX_Compile_Paragraph('auto',b:default_pdfviewer)<CR>
 "{{{ menu

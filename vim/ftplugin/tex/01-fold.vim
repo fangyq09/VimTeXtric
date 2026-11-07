@@ -250,7 +250,6 @@ function! s:TeXFoldBlock(name,list,start) "{{{1
 		exe fold_start.",".fold_end." fold"
 		return end_pos
 	elseif a:name == 'section'
-		let g:test = a:list[a:start+1]
 		let fold_start = a:list[a:start][0]
 		if a:start < list_len - 1
 			let fold_end_line_attempt = a:list[a:start+1][1]
