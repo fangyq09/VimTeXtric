@@ -1,0 +1,11 @@
+#!/bin/bash
+# 如果已经有实例在跑，可以通过 --server 投递文件；如果没有，则带着固定的 --listen 启动
+SOCKET="/tmp/nvim_tex.sock"
+
+if [ -S "$SOCKET" ]; then
+    # 如果主实例活着，直接把双击的文件远程丢给它打开
+    neovide --server "$SOCKET" --remote "$@"
+else
+    # 如果主实例没开，带着固定的 socket 启动并打开当前文件
+    neovide --listen "$SOCKET" "$@"
+fi
