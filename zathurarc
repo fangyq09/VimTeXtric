@@ -1,22 +1,16 @@
 # settings
-set window-height 2040
-set window-width 1700
-#set adjust-open width
-# set recolor true
-# set recolor-lightcolor #000000
+set database sqlite
+set window-height 1020
+set window-width 900
 set default-bg "#F2EBD9"
-#set show-scrollbars "true"
-#set window-title-basename "true"
-#set font "monospace normal 20"
 set scroll-step 200
 set synctex true
-set synctex-editor-command "gvim --servername GVIM10000 --remote-silent +exec%{line} %{input}"
+#set synctex-editor-command "gvim --servername LaTeX --remote-silent +%{line} %{input}"
+set synctex-editor-command "/home/fang/.vim/bin/zathura-gvim-synctex.sh %{input} %{line}"
 
-#set scroll-wrap "true"
 
 set statusbar-bg "#ffd700"
 set statusbar-fg "#000000"
-set highlight-transparency 0.2
 
 ##map and unmap
 ##map [mode] <binding> <shortcut function> <argument>
