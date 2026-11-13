@@ -11,9 +11,8 @@ vim.g.tex_stylish = 1
 ---------------------------
 -- 基础设置
 ---------------------------
--- 开启语法高亮
-vim.cmd("syntax on")
-vim.cmd("filetype plugin indent on")
+-- 开启
+-- vim.cmd("filetype plugin indent on")
 vim.opt.encoding = "utf-8"
 vim.opt.fileencoding = "utf-8"
 vim.opt.fileencodings = { "utf-8", "ucs-bom", "cp936", "gb18030", "big5", "latin1" }
@@ -44,10 +43,14 @@ vim.opt.swapfile = false
 -- 光标位置恢复
 ---------------------------
 vim.api.nvim_create_autocmd("BufReadPost", {
+  pattern = "*",
   callback = function()
-		local line = vim.fn.line('"')
-    if line > 1 and line <= vim.fn.line("$") then
-      vim.cmd('normal! g`"')
+    -- 获取上次光标所在行
+    local mark = vim.api.nvim_buf_get_mark(0, '"')
+    local lcount = vim.api.nvim_buf_line_count(0)
+    -- 检查行号是否有效（防止超出当前文件总行数）
+    if mark[1] > 0 and mark[1] <= lcount then
+      pcall(vim.api.nvim_win_set_cursor, 0, mark)
     end
   end,
 })
@@ -105,7 +108,7 @@ vim.opt.autowriteall = true
 ---------------------------
 -- 折叠
 ---------------------------
-vim.opt.foldmethod = "syntax"
+--vim.opt.foldmethod = "syntax"
 
 ---------------------------
 -- 光标 & 配对
@@ -145,8 +148,7 @@ end
 ---------------------------
 if vim.g.neovide then
   -- 字体
-  -- vim.opt.guifont = "Hack Nerd Font:h14"
-	-- vim.opt.guifont = "Monospace:h14"
+  -- vim.opt.guifont = "LiterationMono Nerd Font:h14"
 	vim.opt.guifont = "DejaVu Sans Mono:h14"
   vim.opt.guifontwide = "文泉驿等宽微米黑:h14"
 
@@ -155,7 +157,7 @@ if vim.g.neovide then
 	
 	--透明度
 	if current_mode == "light" then
-		vim.g.neovide_opacity = 1
+		vim.g.neovide_opacity = 1 -- 完全不透明
 	else
 		vim.g.neovide_opacity = 0.9 -- 90% 不透明
 	end
@@ -208,10 +210,6 @@ vim.api.nvim_create_autocmd("VimLeavePre", {
 -- vim.opt.helplang = "cn"
 ---------------------------
 
----------------------------
--- Netrw 浏览器
----------------------------
-vim.g.netrw_browsex_viewer = "google-chrome"
 
 ---------------------------
 -- 键位映射
@@ -286,8 +284,17 @@ vim.api.nvim_create_autocmd("TermOpen", {
 
 
 ---------------------------
--- nnn设置
+---fcitx 自动切换
 ---------------------------
-vim.api.nvim_create_user_command('NNN', function()
-    require("minimal-nnn").start()
-end, {})
+
+local fcitx = require("fcitx")
+
+vim.api.nvim_create_autocmd("InsertLeave", {
+  callback = fcitx.to_en,
+})
+
+vim.api.nvim_create_autocmd("InsertEnter", {
+  callback = fcitx.to_zh,
+})
+---------------------------
+
