@@ -129,27 +129,29 @@ function! s:is_format_boundary(lnum) abort "{{{
 
     " Display math delimiters
     if l:line =~# '^\s*\\\[\s*$'
-                \ || l:line =~# '^\s*\\]\s*$'
+                \ || l:line =~# '^\s*\\\]\s*$'
                 \ || l:line =~# '^\s*\$\$\s*$'
         return 1
     endif
 
-    " LaTeX commands
+    " LaTeX commands at the start of the line
     if l:line =~# '^\s*\\[A-Za-z@]\+'
         return 1
     endif
 
-    " Comments
-    if l:line =~# '%'
+    " Comments (an escaped \% is not a comment)
+    if l:line =~# '\\\@<!%'
         return 1
     endif
 
-    " Math syntax
-    for l:col in range(1, strlen(l:line))
-        if s:tex_outils_inmathzone(a:lnum, l:col)
-            return 1
-        endif
-    endfor
+    " Lines that START inside a math zone (content of \[..\], equation, ...).
+    " Inline math inside a text line, e.g. "text $x^2$ text", is fine, so only
+    " the first non-blank character is checked, and a leading "$" that opens
+    " inline math is not counted as being inside math.
+    let l:col = match(l:line, '\S') + 1
+    if l:line[l:col - 1] !=# '$' && s:tex_outils_inmathzone(a:lnum, l:col)
+        return 1
+    endif
 
     return 0
 endfunction
